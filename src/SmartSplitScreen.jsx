@@ -35,10 +35,10 @@ const SmartSplitScreen = ({ onRestart }) => {
   const handleSimulatePayment = () => {
     setTxStatus('processing');
     setLogs([]);
-    setTimeout(() => addLog('>> 监听到 B 端大模型厂商 API 调用请求...'), 500);
-    setTimeout(() => addLog(`>> 正在读取链上 AMM 联合曲线... 领域当前需求量: ${demand}`), 1200);
-    setTimeout(() => addLog(`>> 根据 P = Base * (1 + αN) 公式，锁定支付金额: ${currentPrice} Credits...`), 2000);
-    setTimeout(() => addLog('>> 触发 SmartSplitBill.sol 智能合约，校验 B 端资金...'), 2800);
+    setTimeout(() => addLog('>> [终端用户] 询问 ChatGPT："请根据最新研究分析该重症风险..."'), 500);
+    setTimeout(() => addLog(`>> [AI RAG 引擎] 正在全网检索，抓取到创作者独家博客文章 (Hash: 0x8a7b...)`), 1500);
+    setTimeout(() => addLog(`>> [AI Paywall] ⚠️ 拦截成功！检测到大模型未授权抓取，要求支付基础检索费。`), 2500);
+    setTimeout(() => addLog('>> [智能合约] B端触发 triggerRagMicroPayment()，AI-Echo 释放解密密钥...'), 3500);
     
     setTimeout(() => {
       // 模拟链上状态更新：需求量 +1，价格上涨
@@ -46,15 +46,14 @@ const SmartSplitScreen = ({ onRestart }) => {
       const newPrice = calculatePrice(newDemand);
       setDemand(newDemand);
       setCurrentPrice(newPrice);
-      addLog(`>> [AMM 更新] 领域需求量 +1，数据基础价格自动上调至 ${newPrice} CRD 📈`);
-    }, 3800);
+      addLog(`>> [AMM 联合曲线] 该独家知识点热度上升，RAG 基础检索费上调至 ${newPrice} CRD 📈`);
+    }, 4500);
 
-    setTimeout(() => addLog('>> 正在获取 Oracle 价值权重 (创作者: 82.5%, 节点: 10.5%, 社区: 7.0%)...'), 4500);
-    setTimeout(() => addLog('>> 正在执行 Token 免信任跨地址清算与转账...'), 5200);
+    setTimeout(() => addLog('>> [结算网关] 正在执行无感跨链分账 (创作者: 82.5%, 节点: 10.5%)...'), 5500);
     setTimeout(() => {
-      addLog('>> [SUCCESS] 交易已打包入块！Block Height: #8492042');
+      addLog('>> [SUCCESS] 创作者已获得本次 AI 回答引用分润！流水上链完成。');
       setTxStatus('success');
-    }, 6000);
+    }, 6500);
   };
 
   return (
@@ -85,7 +84,7 @@ const SmartSplitScreen = ({ onRestart }) => {
           {/* 左侧控制台 */}
           <div className="lg:col-span-4 flex flex-col space-y-6">
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Server className="w-4 h-4 mr-2 text-blue-400" /> 模拟 B 端数据消费</h3>
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Server className="w-4 h-4 mr-2 text-blue-400" /> 模拟大模型 RAG 检索拦截</h3>
               <div className="space-y-4 mb-6">
                 <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
                   <p className="text-xs text-slate-500 mb-1">调用方 (API Caller)</p>
@@ -103,7 +102,7 @@ const SmartSplitScreen = ({ onRestart }) => {
                 onClick={handleSimulatePayment} disabled={txStatus === 'processing'}
                 className={`w-full py-4 rounded-xl font-bold flex items-center justify-center space-x-2 transition-all duration-300 ${txStatus === 'idle' || txStatus === 'success' ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'bg-slate-800 text-slate-400 cursor-wait'}`}
               >
-                {(txStatus === 'idle' || txStatus === 'success') && <><Zap className="w-5 h-5" /> <span>模拟付款购买数据</span></>}
+                {(txStatus === 'idle' || txStatus === 'success') && <><Zap className="w-5 h-5" /> <span>模拟 C端提问触发 RAG 微支付</span></>}
                 {txStatus === 'processing' && <><Activity className="w-5 h-5 animate-spin" /> <span>AMM 撮合清算中...</span></>}
               </button>
             </div>

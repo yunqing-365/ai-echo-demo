@@ -242,3 +242,38 @@ contract AIEchoProtocol {
         
         emit AssetRegistered(_assetHash, msg.sender, block.timestamp);
     }
+
+// ==========================================
+    // 5. 新增：RAG 检索微支付与防爬虫授权网关
+    // ==========================================
+
+    // 记录 B 端 AI 模型对特定内容的 RAG 调用次数
+    mapping(address => mapping(uint256 => uint256)) public ragCallLedger;
+    // 抛出事件：当 RAG 检索付款成功时，释放解密密钥
+    event RagMicroPayment(uint256 indexed assetHash, address indexed aiCaller, uint256 amount, string unlockKey);
+
+    /**
+     * @dev RAG 检索单次微支付流水线 (Streaming Payment)
+     * 当 AI 模型抓取到该段受保护语料时，触发按次付费，获取解密密钥
+     */
+    function triggerRagMicroPayment(uint256 _assetHash, uint256 _creatorRatio, string memory _unlockKey) public payable {
+        require(msg.value > 0, "微支付调用费必须大于 0"); 
+        
+        // 查找原始创作者
+        address creator = assetRegistry[_assetHash].creator;
+        require(creator != address(0), "请求的数据资产未确权，拒绝服务");
+
+        // 执行秒级免信任分账 (按次结算)
+        uint256 creatorAmount = (msg.value * _creatorRatio) / 1000;
+        uint256 remainingAmount = msg.value - creatorAmount;
+        uint256 platformAmount = (remainingAmount * 60) / 100;
+        uint256 fundAmount = remainingAmount - platformAmount;
+
+        payable(creator).transfer(creatorAmount);
+        payable(platformNode).transfer(platformAmount);
+        payable(ecosystemFund).transfer(fundAmount);
+        
+        // 记录该 AI 公司的调用次数，并抛出解密密钥事件供 B 端爬虫抓取
+        ragCallLedger[msg.sender][_assetHash] += 1;
+        emit RagMicroPayment(_assetHash, msg.sender, msg.value, _unlockKey);
+    }

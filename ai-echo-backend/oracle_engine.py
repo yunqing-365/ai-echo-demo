@@ -294,3 +294,32 @@ async def run_valuation(asset: AssetData):
             "fund_ratio": 7.0
         }
     }
+# ==========================================
+# 【新增】进攻性防守：AI 侵权溯源法庭 API
+# ==========================================
+class TraceRequest(BaseModel):
+    llm_output: str       # 疑似抄袭的大模型输出内容
+    original_text: str    # 创作者的原始已确权内容（Demo 中传明文对比）
+
+@app.post("/api/trace_infringement")
+async def trace_ip_infringement(req: TraceRequest):
+    # 1. 提取大模型回答的知识图谱骨架
+    llm_edges = extract_entities_and_edges(req.llm_output) 
+    original_edges = extract_entities_and_edges(req.original_text)
+    
+    if not llm_edges or not original_edges:
+        return {"status": "failed", "message": "文本特征过少"}
+        
+    # 2. 计算知识拓扑重合度 (Graph Overlap)
+    intersection = llm_edges.intersection(original_edges)
+    overlap_ratio = len(intersection) / len(llm_edges) * 100 if len(llm_edges) > 0 else 0
+    
+    # 生成溯源报告
+    is_infringement = overlap_ratio > 40
+    
+    return {
+        "status": "success",
+        "infringement_probability": min(100.0, overlap_ratio * 1.5),
+        "matched_knowledge_edges": [f"{e[0]}-{e[1]}" for e in list(intersection)[:5]],
+        "conclusion": "检测到高度侵权 (未授权 RAG 抓取)" if is_infringement else "未见明显侵权"
+    }
