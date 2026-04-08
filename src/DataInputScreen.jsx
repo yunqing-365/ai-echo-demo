@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { UploadCloud, Fingerprint, Cpu, Database, CheckCircle, Zap } from 'lucide-react';
 
 const DataInputScreen = ({ onComplete }) => {
@@ -6,13 +6,15 @@ const DataInputScreen = ({ onComplete }) => {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [txHash, setTxHash] = useState('');
+  
+  // 新增：用于存储文本框里的输入内容
+  const [inputText, setInputText] = useState(`{\n  "dataset_name": "Med-QnA-Core-v2",\n  "size": "15,000 pairs",\n  "author_id": "Node-7A9B",\n  "cleanliness_score": 0.98\n}`);
 
   const handleUpload = () => {
     setIsUploading(true);
     setProgress(0);
     setTxHash('');
     
-    // 模拟底层链上确权与数据清洗流程 (Happy Path)
     const steps = [
       { p: 15, text: '正在验证语料格式与数据清洁度...' },
       { p: 40, text: '调用 KnowledgeRegistry.sol 智能合约...' },
@@ -31,23 +33,20 @@ const DataInputScreen = ({ onComplete }) => {
         clearInterval(interval);
         setTxHash('0x' + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join(''));
         setTimeout(() => {
-          if(onComplete) onComplete();
+          // 修改点：跳转第二页时，把输入的文本内容传过去
+          if(onComplete) onComplete(inputText); 
         }, 2000);
       }
     }, 800);
   };
 
   return (
-    // 最外层背景：深空黑底色 + 赛博绿模糊光斑
     <div className="min-h-screen relative flex items-center justify-center bg-slate-950 overflow-hidden p-6 font-sans">
-      {/* 背景装饰光晕 */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-600/20 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-      {/* 核心玻璃拟态卡片 */}
       <div className="relative max-w-5xl w-full bg-slate-900/60 backdrop-blur-2xl border border-slate-700/50 rounded-3xl p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
         
-        {/* 头部标题区域 */}
         <div className="flex items-center space-x-5 mb-10 pb-6 border-b border-slate-700/50">
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
             <Database className="w-8 h-8 text-emerald-400" />
@@ -62,10 +61,7 @@ const DataInputScreen = ({ onComplete }) => {
           </div>
         </div>
 
-        {/* 核心双栏布局 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          
-          {/* 左侧：数据输入区 */}
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide">
@@ -79,13 +75,14 @@ const DataInputScreen = ({ onComplete }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide">
-                2. 数据要素特征值/摘要
+              <label className="block text-sm font-semibold text-slate-300 mb-2 tracking-wide flex justify-between">
+                <span>2. 数据要素特征值/摘要</span>
+                <span className="text-emerald-500 text-xs font-normal animate-pulse">支持实时修改</span>
               </label>
               <textarea 
-                readOnly
-                className="w-full h-36 bg-slate-950/50 border border-slate-700/50 rounded-xl p-4 text-emerald-400/70 font-mono text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
-                defaultValue={`{\n  "dataset_name": "Med-QnA-Core-v2",\n  "size": "15,000 pairs",\n  "author_id": "Node-7A9B",\n  "cleanliness_score": 0.98\n}`}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                className="w-full h-36 bg-slate-950/50 border border-slate-700/50 rounded-xl p-4 text-emerald-400/90 font-mono text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
               />
             </div>
 
@@ -103,9 +100,7 @@ const DataInputScreen = ({ onComplete }) => {
             </button>
           </div>
 
-          {/* 右侧：状态反馈区 (极客风黑色终端面板) */}
           <div className="bg-[#0a0f18] rounded-2xl border border-slate-800 shadow-inner p-6 flex flex-col relative overflow-hidden group">
-            {/* 顶部的“终端”小圆点装饰 */}
             <div className="flex space-x-2 absolute top-4 left-4">
               <div className="w-3 h-3 rounded-full bg-slate-700/50"></div>
               <div className="w-3 h-3 rounded-full bg-slate-700/50"></div>
@@ -119,8 +114,6 @@ const DataInputScreen = ({ onComplete }) => {
 
             {isUploading || txHash ? (
               <div className="flex-1 flex flex-col justify-center space-y-6">
-                
-                {/* 发光进度条 */}
                 <div className="relative pt-1">
                   <div className="flex mb-3 items-center justify-between">
                     <span className="text-xs font-bold py-1 px-3 uppercase rounded-md text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
@@ -137,12 +130,10 @@ const DataInputScreen = ({ onComplete }) => {
                   </div>
                 </div>
                 
-                {/* 荧光绿打字机文本 */}
                 <p className="text-sm text-emerald-400/80 font-mono animate-pulse">
                   {"> "} {statusText}
                 </p>
 
-                {/* 确权成功回执卡片 */}
                 {txHash && (
                   <div className="mt-6 p-5 bg-emerald-950/30 border border-emerald-500/30 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)] transform transition-all duration-500 translate-y-0 opacity-100">
                     <div className="flex items-center text-emerald-400 mb-3">
@@ -156,7 +147,6 @@ const DataInputScreen = ({ onComplete }) => {
                 )}
               </div>
             ) : (
-              // 未上传时的待机界面
               <div className="flex-1 flex flex-col items-center justify-center text-slate-600/50">
                 <div className="relative">
                   <Fingerprint className="w-20 h-20 mb-4 opacity-30 group-hover:text-emerald-500/30 transition-colors duration-500" />
@@ -166,7 +156,6 @@ const DataInputScreen = ({ onComplete }) => {
               </div>
             )}
           </div>
-
         </div>
       </div>
     </div>
