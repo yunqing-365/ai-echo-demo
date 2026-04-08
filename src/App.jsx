@@ -5,32 +5,31 @@ import SmartSplitScreen from './SmartSplitScreen';
 
 function App() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [assetData, setAssetData] = useState(""); // 新增：保存用户输入的数据
+  const [assetData, setAssetData] = useState(""); 
+  const [isZkMode, setIsZkMode] = useState(true);
 
   const handleRestart = () => {
     setCurrentStep(1);
-    setAssetData(""); // 重置时清空数据
+    setAssetData(""); 
   };
 
   return (
     <div className="font-sans antialiased text-slate-200 selection:bg-teal-500/30">
-      
       {currentStep === 1 && (
-        <DataInputScreen onComplete={(data) => {
-          setAssetData(data); // 捕获第一页传出的数据
+        <DataInputScreen onComplete={(data, zkEnabled) => {
+          setAssetData(data); 
+          setIsZkMode(zkEnabled);
           setCurrentStep(2);
         }} />
       )}
       
       {currentStep === 2 && (
-        // 把数据传给第二页
-        <OracleValuationScreen assetData={assetData} onNext={() => setCurrentStep(3)} />
+        <OracleValuationScreen assetData={assetData} isZkMode={isZkMode} onNext={() => setCurrentStep(3)} />
       )}
 
       {currentStep === 3 && (
         <SmartSplitScreen onRestart={handleRestart} />
       )}
-
     </div>
   );
 }
