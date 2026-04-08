@@ -14,6 +14,27 @@ import jieba
 import jieba.posseg as pseg  # 【新增】词性标注，用于抽取实体
 import re
 import random
+# --- 新增：SimHash 相关库 ---
+from simhash import Simhash
+from neo4j import GraphDatabase
+
+# --- 新增：Neo4j 数据库连接 ---
+URI = "bolt://localhost:7687"
+AUTH = ("neo4j", "password123")
+neo4j_driver = GraphDatabase.driver(URI, auth=AUTH)
+
+
+def generate_simhash(text: str) -> int:
+    """
+    生成文本的感知哈希 (SimHash)。
+    返回一个 64 位的整数。两篇文章越相似，这两个整数的二进制差异（汉明距离）越小。
+    """
+    if not text:
+        return 0
+    # 使用已经引入的 jieba 进行分词作为特征
+    features = list(jieba.cut(text))
+    # 返回整数形式的 64 位哈希
+    return Simhash(features).value
 
 app = FastAPI(title="AI-Echo Multimodal Oracle Engine (Enterprise Version)")
 
@@ -33,7 +54,6 @@ collection = chroma_client.get_or_create_collection(name="global_corpus", embedd
 # 【核心升级】简易全网知识图谱 (Graph Memory)
 # 真实生产中应为 Neo4j，此处使用内存 Set 构建共现边
 # ==========================================
-global_graph_edges = set()
 
 def extract_entities_and_edges(text):
     """
@@ -53,6 +73,34 @@ def extract_entities_and_edges(text):
             edge = tuple(sorted([entities[i], entities[j]]))
             edges.add(edge)
     return edges
+
+def check_graph_overlap(tx, edges):
+    """在 Neo4j 中查询当前提取出的边有多少是已经存在于全网图谱中的"""
+    overlap_count = 0
+    for entity1, entity2 in edges:
+        # 查询是否存在 entity1 和 entity2 之间的 CO_OCCUR 关系
+        query = """
+        MATCH (a:Entity {name: $e1})-[r:CO_OCCUR]-(b:Entity {name: $e2})
+        RETURN count(r) as c
+        """
+        result = tx.run(query, e1=entity1, e2=entity2)
+        if result.single()["c"] > 0:
+            overlap_count += 1
+    return overlap_count
+
+def merge_edges_to_neo4j(tx, edges):
+    """将新的边写入 Neo4j 数据库"""
+    for entity1, entity2 in edges:
+        # MERGE 保证了如果节点或边存在则不重复创建，不存在则创建
+        query = """
+        MERGE (a:Entity {name: $e1})
+        MERGE (b:Entity {name: $e2})
+        MERGE (a)-[r:CO_OCCUR]->(b)
+        // 每次共现，边的权重 +1
+        ON CREATE SET r.weight = 1
+        ON MATCH SET r.weight = r.weight + 1
+        """
+        tx.run(query, e1=entity1, e2=entity2)
 
 # 注入多模态基础对比语料
 base_corpus = [
@@ -102,31 +150,7 @@ def calculate_signal_to_noise_ratio(text: str):
     valid_chars = re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9{}[\]()<>:;.,!?_=\-/"\']', text)
     return len(valid_chars) / total_chars
 
-global_demand_ledger = {
-    "medical_sft": 150,  # 医疗语料已经被调用了 150 次
-    "legal_doc": 12,     # 法律语料调用 12 次
-    "general": 5         # 通用语料调用 5 次
-}
 
-def apply_bonding_curve(base_value: float, domain_key: str):
-    """
-    使用对数联合曲线模型： P = P_base * (1 + α * log(1 + N))
-    N 为市场调用次数，α 为曲线陡峭度（控制涨价速度）
-    """
-    # 模拟获取当前领域的调用次数
-    current_supply_demand = global_demand_ledger.get(domain_key, 0)
-    
-    # 每次被调用，需求量+1
-    global_demand_ledger[domain_key] = current_supply_demand + 1
-    
-    alpha = 0.15 # 联合曲线斜率参数
-    # 计算溢价乘数
-    premium_multiplier = 1 + alpha * math.log(1 + current_supply_demand)
-    
-    # 计算最终动态市场价格
-    dynamic_market_price = base_value * premium_multiplier
-    
-    return dynamic_market_price, current_supply_demand + 1, premium_multiplier
 
 # ==========================================
 # 【核心升级】基于 GraphRAG 的特征提取
@@ -149,14 +173,20 @@ def extract_text_features(text: str, vector_distance: float):
     structure_score = min(100, structure_score)
 
     # 3. GraphRAG 图谱反洗稿比对 (真实计算！)
+    # 3. 工业级 GraphRAG 图谱反洗稿比对
     local_edges = extract_entities_and_edges(text)
     if not local_edges:
-        graph_overlap_ratio = 1.0 # 提不出实体，判定为低质/重合度极高
+        graph_overlap_ratio = 1.0 
     else:
-        overlap = len(local_edges.intersection(global_graph_edges))
-        graph_overlap_ratio = overlap / len(local_edges)
-        global_graph_edges.update(local_edges) # 更新全网图谱
-
+        # 开启 Neo4j 会话
+        with neo4j_driver.session() as session:
+            # 第一步：计算图谱重合度
+            overlap = session.read_transaction(check_graph_overlap, local_edges)
+            graph_overlap_ratio = overlap / len(local_edges)
+            
+            # 第二步：将这篇新语料的知识骨架注入全网图谱
+            session.write_transaction(merge_edges_to_neo4j, local_edges)
+            
     # 【深度防伪逻辑】
     # 如果向量距离大（看似稀缺），但图谱重合度高（逻辑骨架一样），说明是洗稿！
     # 真正的稀缺 = 向量距离大 + 图谱重合度低
@@ -246,7 +276,7 @@ async def run_valuation(asset: AssetData):
     elif "法律" in asset.description or "合同" in asset.description:
         domain_key = "legal_doc"
 
-    dynamic_price, new_demand, multiplier = apply_bonding_curve(base_value, domain_key)
+
 
     print(f"[AMM 做市商引擎] 领域: {domain_key} | 累计需求: {new_demand} 次")
     print(f"[AMM 做市商引擎] 联合曲线溢价乘数: {multiplier:.2f}x | 最终结算报价: {dynamic_price:.2f} Credits")
@@ -254,17 +284,11 @@ async def run_valuation(asset: AssetData):
 
     return {
         "status": "success",
-        "asset_hash": "0x" + hashlib.md5(asset.description.encode()).hexdigest() + "040x",
-        "metrics": [
-            {"subject": metric_names[0], "score": round(features["entropy"])},
-            {"subject": metric_names[1], "score": round(features["snr"])},
-            {"subject": metric_names[2], "score": round(features["structure"])},
-            {"subject": metric_names[3], "score": round(final_scarcity)}, 
-            {"subject": metric_names[4], "score": round(final_llm_value)},
-            {"subject": metric_names[5], "score": round(credit_score)},
-        ],
+        "asset_hash": str(generate_simhash(asset.description)),
+        "domain_key": domain_key, # 告诉前端这是什么领域的数据
+        "metrics": [ ... ],
         "final_valuation": {
-            "base_value": round(dynamic_price), # 返回经过联合曲线暴击后的市场真实价格！
+            "base_value": round(base_value), # 直接返回基础价值，由前端传给智能合约算最终价
             "creator_ratio": 82.5,
             "node_ratio": 10.5,
             "fund_ratio": 7.0
