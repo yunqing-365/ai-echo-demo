@@ -48,6 +48,7 @@ const OracleValuationScreen = ({ assetData, isZkMode, onNext }) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            asset_category: assetCategory || 'text', // 添加了这一行
             asset_type: "自定义输入语料",
             description: assetData || "未输入内容",
             author_id: "Node-7A9B",
